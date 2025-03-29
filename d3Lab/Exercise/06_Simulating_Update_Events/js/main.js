@@ -1,77 +1,87 @@
+// GRAPHIC'S SIZE
+var margin = { top: 50, right: 10, bottom: 100, left: 100 };
+var width = 600 - margin.left - margin.right;
+var height = 400 - margin.top - margin.bottom;
+
+// CREATE SVG
+var svg = d3.select("#chart-area")
+    .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom);
+
+var g = svg.append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+// SCALES
+var x = d3.scaleBand().range([0, width]).padding(0.2);
+var y = d3.scaleLinear().range([height, 0]);
+
+// AXES
+var xAxisGroup = g.append("g").attr("class", "x axis").attr("transform", "translate(0," + height + ")");
+var yAxisGroup = g.append("g").attr("class", "y axis");
+
+// TAGS
+g.append("text")
+    .attr("class", "x axis-label")
+    .attr("x", width / 2)
+    .attr("y", height + 40)
+    .attr("text-anchor", "middle")
+    .text("Month");
+
+var yLabel = g.append("text")
+    .attr("class", "y axis-label")
+    .attr("x", -height / 2)
+    .attr("y", -60)
+    .attr("transform", "rotate(-90)")
+    .attr("text-anchor", "middle")
+    .text("Revenue ($)");
+
+
+var showRevenue = true;
+
+// UPLOAD AND UPDATE DATA EVERY SECOND
 d3.json("data/revenues.json").then((data) => {
-    data.forEach((d) => {
-        d.month = d.month;
+    data.forEach(d => {
         d.revenue = +d.revenue;
+        d.profit = +d.profit;
     });
-    console.log(data);
-    
-    var margin = {top: 10, right: 10, bottom: 100, left: 100};
-    var width = 600;
-    var height = 400;
 
-    var svg = d3.select("body")
-        .append("svg")
-        .attr("width", width + margin.right + margin.left)
-        .attr("height", height + margin.top + margin.bottom);
-        
-    var g = svg.append("g")
-        .attr("transform", `translate(${margin.left}, ${margin.top})`);
-    
-    const x = d3.scaleBand()
-        .domain(data.map(d => d.month))  
-        .range([0, width]) 
-        .paddingInner(0.3)
-        .paddingOuter(0.3);
-    
-    const y = d3.scaleLinear()
-        .domain([0, d3.max(data, d => d.revenue)])  
-        .range([height, 0]);
-    
-    const color = d3.scaleOrdinal()
-        .domain(data.map(d => d.month)) 
-        .range(d3.schemeSet3);
-    
-    var rect = g.selectAll("rect")
-        .data(data);
-    
-    rect.enter()
-        .append("rect")
-        .attr("x", d => x(d.month))  
-        .attr("y", d => y(d.revenue))  
+    d3.interval(() => {
+        showRevenue = !showRevenue; // CHANGE BETWEEN REVENUE AND PROFIT
+        update(data);
+    }, 2500);
+
+    update(data);
+}).catch(error => console.log(error));
+
+function update(data) {
+    var value = showRevenue ? "revenue" : "profit";
+
+    // UPDATE SCALE DOMAINS
+    x.domain(data.map(d => d.month));
+    y.domain([0, d3.max(data, d => d[value])]);
+
+    // UPDATE AXES
+    xAxisGroup.transition().duration(2500).call(d3.axisBottom(x));
+    yAxisGroup.transition().duration(2500).call(d3.axisLeft(y).ticks(10));
+
+    // UPDATE Y-AXIS LABEL
+    yLabel.text(showRevenue ? "REVENUE ($)" : "PROFIT ($)");
+
+    // BIND DATA TO BARS
+    var bars = g.selectAll("rect").data(data);
+
+    // REMOVE UNUSED BARS
+    bars.exit().remove();
+
+    // UPDATE & ADD BARS
+    bars.enter().append("rect")
+        .merge(bars) // MERGE ENTER AND UPDATE SELECTIONS
+        .transition().duration(2500)
+        .attr("x", d => x(d.month))
+        .attr("y", d => y(d[value]))
         .attr("width", x.bandwidth())
-        .attr("height", d => height - y(d.revenue))  
-        .attr("fill", "yellow");  
-    
-    var xAxis = d3.axisBottom(x);
-    g.append("g")
-        .attr("transform", `translate(0, ${height})`)
-        .call(xAxis)
-        .selectAll("text")
-        .attr("transform", "rotate(-40)")
-        .attr("x", -5)
-        .attr("y", 10)
-        .attr("text-anchor", "end");
-    
-    var yAxis = d3.axisLeft(y)
-        .ticks(10)
-        .tickFormat(d => "$" + d);  
-        
-    g.append("g")
-        .call(yAxis);
-    
-    g.append("text")
-        .attr("x", width / 2)
-        .attr("y", height + 60)
-        .attr("text-anchor", "middle")
-        .text("Month");  
-    
-    g.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -(height / 2))
-        .attr("y", -60)
-        .attr("text-anchor", "middle")
-        .text("Revenue (dIIs.)");  
+        .attr("height", d => height - y(d[value]))
+        .attr("fill", d => `rgb(255, ${Math.max(0, 255 - y(d[value]))}, 0)`); // CHANGE COLOR BASED ON Y POSITION
+}
 
-}).catch((error) => {
-    console.log(error);
-});
